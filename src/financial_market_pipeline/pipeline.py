@@ -4,7 +4,7 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from financial_market_pipeline.clients.alpha_vantage import MarketDataError
+from financial_market_pipeline.loaders.ingestion_state import (
+    get_last_successful_fetch,
+    record_successful_fetch,
+)
 from financial_market_pipeline.loaders.postgres import load_daily_prices
 from financial_market_pipeline.transformations.market_prices import (
     transform_daily_prices,
@@ -80,8 +84,22 @@ def run_pipeline(
     engine: Engine,
     raw_dir: Path,
     fetcher: MarketDataFetcher | None = None,
+    *,
+    freshness_enabled: bool = False,
+    force: bool = False,
+    refresh_interval: timedelta = timedelta(hours=24),
+    now: datetime | None = None,
 ) -> list[PipelineResult]:
-    """Execute ETL independently for each unique financial instrument."""
+    """Process assets independently with optional API freshness checks."""
+
+    if freshness_enabled and fetcher is None:
+        raise ValueError("Freshness checks require an API fetcher.")
+
+    if freshness_enabled and refresh_interval <= timedelta(0):
+        raise ValueError("Refresh interval must be positive.")
+
+    if now is not None and (now.tzinfo is None or now.utcoffset() is None):
+        raise ValueError("Current time must be timezone-aware.")
 
     results: list[PipelineResult] = []
 
@@ -96,6 +114,27 @@ def run_pipeline(
             if not symbol or not symbol.isalnum():
                 raise ValueError("Invalid stock symbol.")
 
+            if freshness_enabled and not force:
+                last_fetch = get_last_successful_fetch(symbol, engine)
+                current_time = now if now is not None else datetime.now(UTC)
+
+                if last_fetch is not None:
+                    elapsed_since_fetch = current_time - last_fetch
+
+                    if timedelta(0) <= elapsed_since_fetch < refresh_interval:
+                        logger.info(
+                            "Skipping %s: last successful fetch at %s",
+                            symbol,
+                            last_fetch.isoformat(),
+                        )
+                        results.append(
+                            PipelineResult(
+                                symbol=symbol,
+                                status="skipped",
+                            )
+                        )
+                        continue
+
             if fetcher is None:
                 payload = load_latest_raw(symbol, raw_dir)
             else:
@@ -104,6 +143,15 @@ def run_pipeline(
 
             frame = transform_daily_prices(payload, symbol)
             affected_rows = load_daily_prices(frame, engine)
+
+            if freshness_enabled:
+                fetched_at = now if now is not None else datetime.now(UTC)
+
+                record_successful_fetch(
+                    symbol,
+                    engine,
+                    fetched_at=fetched_at,
+                )
 
             result = PipelineResult(
                 symbol=symbol,

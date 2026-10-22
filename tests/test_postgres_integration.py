@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 
 from financial_market_pipeline.loaders.postgres import (
     create_database_engine,
+    get_latest_price_date,
     load_daily_prices,
 )
 
@@ -24,6 +25,7 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def database():
     """Provide a test symbol and clean up only test records."""
+
     engine = create_database_engine()
     symbol = "T" + uuid4().hex[:11].upper()
 
@@ -35,11 +37,13 @@ def database():
                 text("DELETE FROM daily_prices WHERE symbol = :symbol"),
                 {"symbol": symbol},
             )
+
         engine.dispose()
 
 
 def make_frame(symbol, close="103.00", trading_date=None):
     """Create a valid OHLCV record for integration testing."""
+
     return pd.DataFrame(
         [
             {
@@ -57,6 +61,7 @@ def make_frame(symbol, close="103.00", trading_date=None):
 
 def test_insert_idempotency_and_update(database):
     """Verify insert, unchanged reload and changed-price update."""
+
     engine, symbol = database
     frame = make_frame(symbol)
 
@@ -93,6 +98,7 @@ def test_insert_idempotency_and_update(database):
 
 def test_transaction_rollback(database):
     """Verify a failed batch does not leave partial records."""
+
     engine, symbol = database
 
     valid = make_frame(symbol)
@@ -114,3 +120,31 @@ def test_transaction_rollback(database):
         ).scalar_one()
 
     assert total == 0
+
+
+def test_get_latest_price_date(database):
+    """Return the newest stored date or None for missing data."""
+
+    engine, symbol = database
+
+    assert get_latest_price_date(symbol, engine) is None
+
+    older = make_frame(
+        symbol,
+        trading_date=date(2026, 10, 19),
+    )
+
+    newer = make_frame(
+        symbol,
+        trading_date=date(2026, 10, 21),
+    )
+
+    load_daily_prices(older, engine)
+    load_daily_prices(newer, engine)
+
+    assert get_latest_price_date(
+        symbol.lower(),
+        engine,
+    ) == date(2026, 10, 21)
+
+    assert get_latest_price_date("UNKNOWN", engine) is None

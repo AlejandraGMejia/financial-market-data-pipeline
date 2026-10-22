@@ -1,10 +1,11 @@
 """PostgreSQL loader for validated financial market data."""
 
 import os
+from datetime import date
 
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import MetaData, Table, create_engine, or_
+from sqlalchemy import MetaData, Table, create_engine, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import URL, Engine
 
@@ -36,6 +37,31 @@ def create_database_engine() -> Engine:
         url,
         pool_pre_ping=True,
     )
+
+
+def get_latest_price_date(
+    symbol: str,
+    engine: Engine,
+) -> date | None:
+    """Return the newest stored trading date for a symbol."""
+
+    symbol = symbol.strip().upper()
+
+    if not symbol or not symbol.isalnum():
+        raise ValueError("Invalid stock symbol.")
+
+    with engine.connect() as connection:
+        metadata = MetaData()
+
+        table = Table(
+            "daily_prices",
+            metadata,
+            autoload_with=connection,
+        )
+
+        statement = select(func.max(table.c.date)).where(table.c.symbol == symbol)
+
+        return connection.execute(statement).scalar_one()
 
 
 def load_daily_prices(

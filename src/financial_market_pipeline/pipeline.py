@@ -12,6 +12,7 @@ from requests.exceptions import RequestException
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
+from financial_market_pipeline.clients.alpha_vantage import MarketDataError
 from financial_market_pipeline.loaders.postgres import load_daily_prices
 from financial_market_pipeline.transformations.market_prices import (
     transform_daily_prices,
@@ -80,9 +81,10 @@ def run_pipeline(
     raw_dir: Path,
     fetcher: MarketDataFetcher | None = None,
 ) -> list[PipelineResult]:
-    """Execute extraction, transformation, and loading."""
+    """Execute ETL independently for each unique financial instrument."""
 
-    results = []
+    results: list[PipelineResult] = []
+
     normalized_symbols = dict.fromkeys(symbol.strip().upper() for symbol in symbols)
 
     for symbol in normalized_symbols:
@@ -118,6 +120,7 @@ def run_pipeline(
             )
 
         except (
+            MarketDataError,
             ValueError,
             TypeError,
             KeyError,

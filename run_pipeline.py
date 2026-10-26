@@ -14,20 +14,18 @@ from financial_market_pipeline.pipeline import run_pipeline
 DEFAULT_SYMBOLS = ["AAPL", "MSFT", "NVDA", "JPM", "SPY"]
 
 
-def positive_hours(value: str) -> int:
-    """Parse a strictly positive refresh interval."""
+def positive_integer(value: str) -> int:
+    """Parse a strictly positive integer."""
 
     try:
-        hours = int(value)
+        number = int(value)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError(
-            "Refresh hours must be a positive integer."
-        ) from exc
+        raise argparse.ArgumentTypeError("Value must be a positive integer.") from exc
 
-    if hours <= 0:
-        raise argparse.ArgumentTypeError("Refresh hours must be greater than zero.")
+    if number <= 0:
+        raise argparse.ArgumentTypeError("Value must be greater than zero.")
 
-    return hours
+    return number
 
 
 def main() -> int:
@@ -51,21 +49,28 @@ def main() -> int:
 
     parser.add_argument(
         "--refresh-hours",
-        type=positive_hours,
+        type=positive_integer,
         default=24,
-        help="Minimum hours between successful API fetches (default: 24).",
+        help="Minimum hours between successful API fetches.",
+    )
+
+    parser.add_argument(
+        "--daily-api-limit",
+        type=positive_integer,
+        default=5,
+        help="Local daily API request budget (default: 5).",
     )
 
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Bypass freshness checks and request live API data.",
+        help="Bypass freshness checks, but not the API budget.",
     )
 
     args = parser.parse_args()
 
     if args.force and args.source != "api":
-        parser.error("--force is only available with --source api.")
+        parser.error("--force requires --source api.")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -90,6 +95,8 @@ def main() -> int:
             freshness_enabled=args.source == "api",
             force=args.force,
             refresh_interval=timedelta(hours=args.refresh_hours),
+            budget_enabled=args.source == "api",
+            daily_api_limit=args.daily_api_limit,
         )
     finally:
         engine.dispose()

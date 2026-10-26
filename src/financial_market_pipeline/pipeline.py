@@ -13,6 +13,10 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from financial_market_pipeline.clients.alpha_vantage import MarketDataError
+from financial_market_pipeline.loaders.api_budget import (
+    APIBudgetExceeded,
+    reserve_api_request,
+)
 from financial_market_pipeline.loaders.ingestion_state import (
     get_last_successful_fetch,
     record_successful_fetch,
@@ -89,14 +93,22 @@ def run_pipeline(
     force: bool = False,
     refresh_interval: timedelta = timedelta(hours=24),
     now: datetime | None = None,
+    budget_enabled: bool = False,
+    daily_api_limit: int = 5,
 ) -> list[PipelineResult]:
-    """Process assets independently with optional API freshness checks."""
+    """Process assets with optional freshness and daily API controls."""
 
     if freshness_enabled and fetcher is None:
         raise ValueError("Freshness checks require an API fetcher.")
 
+    if budget_enabled and fetcher is None:
+        raise ValueError("API budget requires an API fetcher.")
+
     if freshness_enabled and refresh_interval <= timedelta(0):
         raise ValueError("Refresh interval must be positive.")
+
+    if budget_enabled and daily_api_limit <= 0:
+        raise ValueError("Daily API limit must be positive.")
 
     if now is not None and (now.tzinfo is None or now.utcoffset() is None):
         raise ValueError("Current time must be timezone-aware.")
@@ -107,7 +119,6 @@ def run_pipeline(
 
     for symbol in normalized_symbols:
         started = datetime.now(UTC)
-
         logger.info("Starting pipeline for %s", symbol)
 
         try:
@@ -115,7 +126,11 @@ def run_pipeline(
                 raise ValueError("Invalid stock symbol.")
 
             if freshness_enabled and not force:
-                last_fetch = get_last_successful_fetch(symbol, engine)
+                last_fetch = get_last_successful_fetch(
+                    symbol,
+                    engine,
+                )
+
                 current_time = now if now is not None else datetime.now(UTC)
 
                 if last_fetch is not None:
@@ -123,10 +138,11 @@ def run_pipeline(
 
                     if timedelta(0) <= elapsed_since_fetch < refresh_interval:
                         logger.info(
-                            "Skipping %s: last successful fetch at %s",
+                            "Skipping %s: recently updated at %s",
                             symbol,
                             last_fetch.isoformat(),
                         )
+
                         results.append(
                             PipelineResult(
                                 symbol=symbol,
@@ -138,6 +154,18 @@ def run_pipeline(
             if fetcher is None:
                 payload = load_latest_raw(symbol, raw_dir)
             else:
+                if budget_enabled:
+                    used = reserve_api_request(
+                        engine,
+                        daily_limit=daily_api_limit,
+                    )
+                    logger.info(
+                        "Reserved API request %d/%d for %s",
+                        used,
+                        daily_api_limit,
+                        symbol,
+                    )
+
                 payload = fetcher(symbol)
                 save_raw_data(payload, symbol, raw_dir)
 
@@ -168,6 +196,7 @@ def run_pipeline(
             )
 
         except (
+            APIBudgetExceeded,
             MarketDataError,
             ValueError,
             TypeError,

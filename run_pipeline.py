@@ -11,8 +11,6 @@ from financial_market_pipeline.config import get_api_key
 from financial_market_pipeline.loaders.postgres import create_database_engine
 from financial_market_pipeline.pipeline import run_pipeline
 
-DEFAULT_SYMBOLS = ["AAPL", "MSFT", "NVDA", "JPM", "SPY"]
-
 
 def positive_integer(value: str) -> int:
     """Parse a strictly positive integer."""
@@ -37,7 +35,7 @@ def main() -> int:
         "--source",
         choices=["raw", "api"],
         default="raw",
-        help="Read saved JSON files or retrieve data from the API.",
+        help="Read saved JSON or retrieve data from the API.",
     )
 
     parser.add_argument(
@@ -58,7 +56,7 @@ def main() -> int:
         "--daily-api-limit",
         type=positive_integer,
         default=5,
-        help="Local daily API request budget (default: 5).",
+        help="Local daily API request budget.",
     )
 
     parser.add_argument(
@@ -116,12 +114,18 @@ def main() -> int:
     successful = sum(result.status == "success" for result in results)
     skipped = sum(result.status == "skipped" for result in results)
     failed = sum(result.status == "failed" for result in results)
+    blocked = sum(result.status == "blocked" for result in results)
 
-    print(f"\nProcessed: {successful} | Skipped: {skipped} | Failed: {failed}")
+    print(
+        f"\nProcessed: {successful} | "
+        f"Skipped: {skipped} | "
+        f"Failed: {failed} | "
+        f"Blocked: {blocked}"
+    )
 
     print(f"Completed without failures: {successful + skipped}/{len(results)} assets")
 
-    return 0 if failed == 0 else 1
+    return 0 if failed == 0 and blocked == 0 else 1
 
 
 if __name__ == "__main__":

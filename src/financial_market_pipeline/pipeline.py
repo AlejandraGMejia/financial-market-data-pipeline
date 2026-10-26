@@ -12,7 +12,10 @@ from requests.exceptions import RequestException
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from financial_market_pipeline.clients.alpha_vantage import MarketDataError
+from financial_market_pipeline.clients.alpha_vantage import (
+    MarketDataError,
+    MarketDataRateLimitError,
+)
 from financial_market_pipeline.loaders.api_budget import (
     APIBudgetExceeded,
     reserve_api_request,
@@ -96,7 +99,7 @@ def run_pipeline(
     budget_enabled: bool = False,
     daily_api_limit: int = 5,
 ) -> list[PipelineResult]:
-    """Process assets with optional freshness and daily API controls."""
+    """Process assets with freshness and API budget controls."""
 
     if freshness_enabled and fetcher is None:
         raise ValueError("Freshness checks require an API fetcher.")
@@ -114,10 +117,25 @@ def run_pipeline(
         raise ValueError("Current time must be timezone-aware.")
 
     results: list[PipelineResult] = []
+    provider_rate_limited = False
 
     normalized_symbols = dict.fromkeys(symbol.strip().upper() for symbol in symbols)
 
     for symbol in normalized_symbols:
+        if provider_rate_limited:
+            logger.warning(
+                "Blocking %s: provider API limit was reached.",
+                symbol,
+            )
+            results.append(
+                PipelineResult(
+                    symbol=symbol,
+                    status="blocked",
+                    error="MarketDataRateLimitError",
+                )
+            )
+            continue
+
         started = datetime.now(UTC)
         logger.info("Starting pipeline for %s", symbol)
 
@@ -134,9 +152,9 @@ def run_pipeline(
                 current_time = now if now is not None else datetime.now(UTC)
 
                 if last_fetch is not None:
-                    elapsed_since_fetch = current_time - last_fetch
+                    elapsed = current_time - last_fetch
 
-                    if timedelta(0) <= elapsed_since_fetch < refresh_interval:
+                    if timedelta(0) <= elapsed < refresh_interval:
                         logger.info(
                             "Skipping %s: recently updated at %s",
                             symbol,
@@ -195,6 +213,21 @@ def run_pipeline(
                 result.affected_rows,
             )
 
+        except MarketDataRateLimitError:
+            provider_rate_limited = True
+
+            result = PipelineResult(
+                symbol=symbol,
+                status="failed",
+                error="MarketDataRateLimitError",
+            )
+
+            logger.warning(
+                "Alpha Vantage rate limit reached for %s. "
+                "Remaining API requests will be blocked.",
+                symbol,
+            )
+
         except (
             APIBudgetExceeded,
             MarketDataError,
@@ -216,12 +249,12 @@ def run_pipeline(
                 symbol,
             )
 
-        elapsed = (datetime.now(UTC) - started).total_seconds()
+        elapsed_seconds = (datetime.now(UTC) - started).total_seconds()
 
         logger.info(
             "Processing time for %s: %.2f seconds",
             symbol,
-            elapsed,
+            elapsed_seconds,
         )
 
         results.append(result)

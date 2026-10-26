@@ -16,21 +16,36 @@ REQUIRED_COLUMNS = ("symbol", "date", *PRICE_COLUMNS)
 
 
 def create_database_engine() -> Engine:
-    """Create a PostgreSQL connection engine."""
+    """Create a PostgreSQL engine using environment configuration."""
 
     user = os.getenv("POSTGRES_USER")
     password = os.getenv("POSTGRES_PASSWORD")
 
+    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
+    port_value = os.getenv("POSTGRES_PORT", "5433")
+    database = os.getenv("POSTGRES_DB", "financial_market")
+
     if not user or not password:
         raise ValueError("PostgreSQL credentials are missing.")
+
+    if not host.strip() or not database.strip():
+        raise ValueError("PostgreSQL host and database are required.")
+
+    try:
+        port = int(port_value)
+    except ValueError as exc:
+        raise ValueError("PostgreSQL port must be an integer.") from exc
+
+    if not 1 <= port <= 65535:
+        raise ValueError("PostgreSQL port must be between 1 and 65535.")
 
     url = URL.create(
         drivername="postgresql+psycopg",
         username=user,
         password=password,
-        host="127.0.0.1",
-        port=5433,
-        database="financial_market",
+        host=host,
+        port=port,
+        database=database,
     )
 
     return create_engine(

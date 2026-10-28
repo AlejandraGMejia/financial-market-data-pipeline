@@ -727,6 +727,13 @@ Real API keys and authentication passwords must never be included in commits, sc
 
 ---
 
+## Portfolio Presentations
+
+The project is available as an editable PowerPoint presentation in both languages:
+
+- [English Presentation](presentations/financial_market_presentation_en.pptx)
+- [Presentación en Español](presentations/financial_market_presentation_es.pptx)
+
 ## Author
 
 **Alejandra G. Mejía**

@@ -16,7 +16,7 @@ permissions:
 jobs:
   code-quality:
     name: Code Quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -43,7 +43,7 @@ jobs:
 
   unit-tests:
     name: ETL Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
@@ -59,8 +59,106 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Run ETL tests without database integration
+      - name: Run ETL unit tests
         env:
           RUN_DB_TESTS: "0"
         run: |
           python -m pytest -q --tb=short
+
+  postgres-integration:
+    name: PostgreSQL Integration Tests
+    runs-on: ubuntu-24.04
+
+    env:
+      POSTGRES_USER: ci_user
+      POSTGRES_PASSWORD: ci_test_password_only
+      POSTGRES_DB: financial_market
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5433"
+      RUN_DB_TESTS: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install project dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Start PostgreSQL
+        run: |
+          docker compose up -d --wait postgres
+          docker compose ps
+
+      - name: Apply database schema
+        run: |
+          for sql_file in sql/*.sql; do
+            echo "Applying ${sql_file}"
+            docker compose exec -T postgres \
+              psql -v ON_ERROR_STOP=1 \
+              -U "$POSTGRES_USER" \
+              -d "$POSTGRES_DB" \
+              < "$sql_file"
+          done
+
+      - name: Run all ETL tests with PostgreSQL
+        run: |
+          python -m pytest -q --tb=short
+
+      - name: Show database logs on failure
+        if: failure()
+        run: docker compose logs --tail=100 postgres
+
+      - name: Stop PostgreSQL
+        if: always()
+        run: docker compose down -v
+
+  airflow-tests:
+    name: Airflow DAG Tests
+    runs-on: ubuntu-24.04
+
+    env:
+      AIRFLOW_HOME: /tmp/financial-market-airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Create isolated Airflow environment
+        run: |
+          python -m venv .venv-airflow
+          .venv-airflow/bin/python -m pip install --upgrade pip
+
+      - name: Install Apache Airflow
+        run: |
+          AIRFLOW_VERSION="3.3.2"
+          PYTHON_VERSION="3.14"
+
+          CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+
+          .venv-airflow/bin/python -m pip install \
+            "apache-airflow==${AIRFLOW_VERSION}" \
+            --constraint "${CONSTRAINT_URL}"
+
+      - name: Verify Airflow dependencies
+        run: |
+          .venv-airflow/bin/python -m pip check
+
+      - name: Run Airflow DAG unit tests
+        run: |
+          .venv-airflow/bin/python -m unittest discover \
+            -s airflow_tests \
+            -p "test_*.py" \
+            -v

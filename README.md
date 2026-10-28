@@ -636,6 +636,13 @@ The workflow status can be viewed in the repository's GitHub Actions section:
 
 The badge at the top of this README reflects the workflow's latest available status for authorized viewers.
 
+## Technical Reports
+
+Detailed project documentation is available in both languages:
+
+- [Technical Report — English](docs/financial_market_technical_report_en.md)
+- [Informe técnico — Español](docs/financial_market_technical_report_es.md)
+
 ## Reliability and Design Decisions
 
 ### Idempotent Loading

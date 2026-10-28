@@ -1,9 +1,9 @@
 
 # System Architecture — Financial Market Data Pipeline
 
-**Author:** Alejandra G. Mejía  
-**Project:** Data Engineering Portfolio — Project 02  
-**Status:** Implemented and validated locally and through CI  
+**Author:** Alejandra G. Mejía
+**Project:** Data Engineering Portfolio — Project 02
+**Status:** Implemented and validated locally and through CI
 **Last Updated:** October 28, 2026
 
 ---

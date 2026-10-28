@@ -52,19 +52,19 @@ This project addresses these challenges through modular ETL components, data qua
                       SQL Analytics
 
 
-                Apache Airflow
-                      |
-                      v
-            Financial Market ETL DAG
-                      |
-                      v
-              Python ETL Entry Point
-                      |
-                      v
-               Pipeline Execution
-                      |
-                      v
-                Task Status & Logs
+                    Apache Airflow
+                          |
+                          v
+              Financial Market ETL DAG
+                          |
+                          v
+                 Python ETL Entry Point
+                          |
+                          v
+                  Pipeline Execution
+                          |
+                          v
+                   Task Status & Logs
 ```
 
 The ETL components can also run independently from Airflow through the command-line interface.
@@ -274,7 +274,7 @@ Apply the required SQL schema files from the `sql/` directory before executing t
 
 ### 4. Run the ETL Pipeline
 
-#### Offline ingestion
+#### Offline Ingestion
 
 Replay previously saved AAPL market data:
 
@@ -286,7 +286,7 @@ This mode does not consume Alpha Vantage API requests.
 
 Previously saved raw JSON files must be available locally.
 
-#### Live API ingestion
+#### Live API Ingestion
 
 Fetch market data using Alpha Vantage:
 
@@ -302,7 +302,7 @@ python run_pipeline.py --source api --symbols AAPL MSFT NVDA
 
 Live ingestion is subject to the provider's API limits and the project's configured request budget.
 
-#### Configure the refresh interval
+#### Configure the Refresh Interval
 
 ```bash
 python run_pipeline.py \
@@ -311,7 +311,7 @@ python run_pipeline.py \
   --refresh-hours 24
 ```
 
-#### Configure the daily API request budget
+#### Configure the Daily API Request Budget
 
 ```bash
 python run_pipeline.py \
@@ -320,7 +320,7 @@ python run_pipeline.py \
   --daily-api-limit 5
 ```
 
-#### Force a new API fetch
+#### Force a New API Fetch
 
 ```bash
 python run_pipeline.py \
@@ -437,7 +437,7 @@ The following screenshots demonstrate successful workflow orchestration and exec
 
 The screenshot shows a manually triggered DAG run completed successfully, with the `run_market_etl` task marked as successful.
 
-**ETL task execution logs**
+**ETL Task Execution Logs**
 
 ![Apache Airflow ETL task logs](docs/images/airflow_task_logs.png)
 
@@ -525,7 +525,7 @@ Airflow invokes the command using `subprocess.run(..., check=True)`, allowing fa
 
 ### Separation of Responsibilities
 
-- **ETL application:** extraction, transformation, validation, and loading.
+- **ETL Application:** extraction, transformation, validation, and loading.
 - **Apache Airflow:** workflow orchestration and operational visibility.
 - **PostgreSQL:** structured market data and ingestion metadata.
 - **Docker Compose:** local database infrastructure.
@@ -578,6 +578,16 @@ Real API keys and authentication passwords must never be included in commits, sc
 - Live API extraction is constrained by Alpha Vantage rate limits and the configured local request budget.
 - Production deployment, alerting, and cloud infrastructure are outside the current implementation scope.
 
+---
+
 ## Author
 
-Data Engineering Portfolio Project — Project 02
+**Alejandra G. Mejía**
+
+Data Analyst | Aspiring Data Engineer
+
+**GitHub:** [AlejandraGMejia](https://github.com/AlejandraGMejia)
+
+**Portfolio Project 02 — Financial Market Data Pipeline**
+
+*Designed and developed as part of a professional portfolio focused on Data Analytics, Data Engineering, and reliable data-driven systems.*

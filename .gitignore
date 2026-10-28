@@ -28,3 +28,4 @@ logs/
 # Editor and OS
 .vscode/
 .DS_Store
+.venv-airflow/

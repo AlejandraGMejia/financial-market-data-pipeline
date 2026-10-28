@@ -1,6 +1,8 @@
 
 # Financial Market Data Pipeline
 
+**Architecture Documentation:** [View System Architecture](docs/architecture.md)
+
 [![Financial Market Pipeline CI](https://github.com/AlejandraGMejia/financial-market-data-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/AlejandraGMejia/financial-market-data-pipeline/actions/workflows/ci.yml)
 
 **Author:** Alejandra G. Mejía
